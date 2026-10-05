@@ -1,0 +1,915 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Career &amp; learning path recommender</title>
+<style>
+/* Visual direction: engineering schematic. Thin rules, a strict grid,
+   monospace for skill tokens because they are identifiers, and colour
+   used only to carry meaning — green holds, amber missing, blue next. */
+
+:root{
+  --ink:#1B2030;
+  --ink-2:#555D73;
+  --paper:#F4F5F7;
+  --card:#FFFFFF;
+  --line:rgba(27,32,48,.14);
+  --line-2:rgba(27,32,48,.07);
+  --known:#15704E;
+  --known-bg:rgba(21,112,78,.10);
+  --gap:#A8521C;
+  --gap-bg:rgba(168,82,28,.10);
+  --accent:#2E46C8;
+  --accent-bg:rgba(46,70,200,.08);
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;background:var(--paper);color:var(--ink);
+  font:400 15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+.wrap{max-width:760px;margin:0 auto;background:var(--card);min-height:100vh}
+
+header{padding:26px 20px 22px;border-bottom:2px solid var(--ink)}
+header h1{margin:0;font-size:clamp(25px,6.4vw,34px);font-weight:650;letter-spacing:-.021em;line-height:1.1}
+header p{margin:9px 0 0;max-width:52ch;font-size:14px;color:var(--ink-2)}
+
+section{padding:20px;border-bottom:1px solid var(--line)}
+h2{margin:0 0 4px;font-size:15px;font-weight:650;letter-spacing:-.008em}
+.hint{margin:0 0 12px;font-size:13px;color:var(--ink-2);max-width:56ch}
+
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{
+  font:inherit;font-size:13px;font-family:var(--mono);
+  padding:6px 10px;border:1px solid var(--line);border-radius:3px;
+  background:transparent;color:var(--ink);cursor:pointer;
+}
+.chip:hover{border-color:var(--ink-2)}
+.chip.on{background:var(--ink);border-color:var(--ink);color:#fff}
+.chip.plain{font-family:inherit}
+.chip:focus-visible,select:focus-visible,button:focus-visible,input:focus-visible{
+  outline:2px solid var(--accent);outline-offset:2px}
+
+label.field{display:block;font-size:13px;color:var(--ink-2);margin:0 0 5px}
+select,input[type=text],input[type=number]{
+  font:inherit;width:100%;padding:9px 10px;border:1px solid var(--line);
+  border-radius:3px;background:var(--card);color:var(--ink)}
+.row{display:flex;gap:12px;flex-wrap:wrap}
+.row>div{flex:1 1 160px}
+
+#go{
+  font:inherit;font-size:15px;font-weight:600;width:100%;padding:14px;
+  margin-top:18px;background:var(--accent);color:#fff;border:0;border-radius:3px;cursor:pointer}
+#go:hover{background:#2539a8}
+
+/* ---- results ---- */
+.tokens{display:flex;flex-wrap:wrap;gap:6px;margin:0;padding:0;list-style:none}
+.tokens li{
+  font-family:var(--mono);font-size:12.5px;padding:4px 9px;border-radius:3px;
+  background:var(--line-2)}
+.tokens li.known{background:var(--known-bg);color:var(--known)}
+.tokens li.gap{background:var(--gap-bg);color:var(--gap)}
+.tokens li .implied{opacity:.65;font-style:italic;font-family:inherit;margin-left:5px;font-size:11px}
+
+.stage{display:flex;gap:13px;padding:13px 0;border-top:1px solid var(--line-2)}
+.stage:first-child{border-top:0}
+.stage .num{
+  flex:0 0 26px;height:26px;border-radius:50%;background:var(--accent-bg);color:var(--accent);
+  font-size:12.5px;font-weight:650;display:flex;align-items:center;justify-content:center}
+.stage .body{flex:1;min-width:0}
+.stage .par{margin:5px 0 0;font-size:12px;color:var(--ink-2)}
+
+.res{padding:15px 0;border-top:1px solid var(--line-2)}
+.res:first-child{border-top:0}
+.res h3{margin:0;font-size:15px;font-weight:600}
+.res .meta{margin:3px 0 8px;font-size:12.5px;color:var(--ink-2)}
+.res .blurb{margin:0 0 9px;font-size:13.5px;color:var(--ink-2)}
+.bar{height:6px;background:var(--line-2);border-radius:2px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--accent)}
+.pct{margin:5px 0 9px;font-size:12px;color:var(--ink-2);font-family:var(--mono)}
+
+details{margin-top:9px}
+summary{font-size:12.5px;color:var(--accent);cursor:pointer}
+.breakdown{list-style:none;margin:9px 0 0;padding:0}
+.breakdown li{display:grid;grid-template-columns:92px 1fr 34px;align-items:center;gap:8px;margin-bottom:4px}
+.breakdown span{font-size:11.5px;color:var(--ink-2)}
+.breakdown i{display:block;height:5px;background:var(--ink-2);border-radius:2px;max-width:100%}
+.breakdown em{font-size:11.5px;font-style:normal;text-align:right;font-family:var(--mono);color:var(--ink-2)}
+
+.summary-line{
+  display:flex;gap:20px;flex-wrap:wrap;padding:13px 15px;margin-bottom:4px;
+  background:var(--accent-bg);border-radius:3px}
+.summary-line div{font-size:13px}
+.summary-line b{display:block;font-size:21px;font-weight:650;font-family:var(--mono);letter-spacing:-.02em}
+
+.empty{font-size:14px;color:var(--ink-2)}
+.warn{padding:12px 14px;background:var(--gap-bg);color:var(--gap);border-radius:3px;font-size:13.5px}
+
+footer{padding:20px;font-size:12.5px;line-height:1.6;color:var(--ink-2)}
+code{font-family:var(--mono);font-size:12px;background:var(--line-2);padding:1px 4px;border-radius:2px}
+
+@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>What should I learn next?</h1>
+    <p>Pick what you know and where you want to get to. The engine finds the gap, orders it by prerequisite, and ranks learning resources — showing its working at every step.</p>
+  </header>
+
+  <section>
+    <h2>What do you already know?</h2>
+    <p class="hint">Selected skills are counted as held. Filter the list to find things quickly.</p>
+    <input id="skillFilter" type="text" placeholder="Filter skills…" autocomplete="off" spellcheck="false" aria-label="Filter skills" style="margin-bottom:10px">
+    <div class="chips" id="skills"></div>
+  </section>
+
+  <section>
+    <h2>Where are you heading?</h2>
+    <div class="row">
+      <div>
+        <label class="field" for="role">Target role</label>
+        <select id="role"></select>
+      </div>
+      <div>
+        <label class="field" for="hours">Hours per week</label>
+        <input id="hours" type="number" min="0" max="80" step="1">
+      </div>
+    </div>
+    <div style="margin-top:14px">
+      <label class="field">Experience level</label>
+      <div class="chips" id="experience"></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>What interests you?</h2>
+    <p class="hint">Used as a light preference signal, worth 10% of the score.</p>
+    <div class="chips" id="interests"></div>
+    <button id="go">Build my learning path</button>
+  </section>
+
+  <div id="results"></div>
+
+  <section>
+    <h2>How resources are ranked</h2>
+    <p class="hint">Every candidate gets a score between 0 and 1 from six weighted signals. Similarity compares text; skill gap measures how much of a resource addresses something missing; readiness checks whether its prerequisites are met; difficulty compares to your stated level; preference matches your interests; diversity penalises resources that overlap what is already on the list.</p>
+    <ul class="breakdown" id="weights"></ul>
+  </section>
+
+  <footer>
+    Runs entirely in your browser. No API keys, no accounts, no network requests, nothing sent anywhere.
+    <br><br>
+    Similarity is TF-IDF cosine over alias-expanded text, not neural sentence embeddings &mdash;
+    a page with no network access cannot load a transformer model. It resolves synonyms such as
+    <code>NLP</code> and <code>natural language processing</code>, but will not relate two phrases
+    that share no vocabulary. Roles, skills and resources are a hand-authored prototype dataset.
+  </footer>
+
+</div>
+<script>
+/* ---------------------------------------------------------------
+   DATA LAYER
+
+   A prototype dataset. In production the role-to-skill map would come
+   from job postings or an occupational taxonomy, and the resources
+   from a course catalogue. Everything here is hand-authored so the
+   page runs with no network access and no API keys.
+--------------------------------------------------------------- */
+
+const ROLES = {
+  'Generative AI Engineer': [
+    'Python', 'Machine Learning', 'Deep Learning', 'PyTorch', 'Transformers',
+    'Hugging Face', 'Embeddings', 'Vector Databases', 'RAG', 'LangChain',
+    'LangGraph', 'FastAPI', 'LLM Evaluation'
+  ],
+  'Machine Learning Engineer': [
+    'Python', 'Statistics', 'Pandas', 'NumPy', 'Scikit-learn', 'Machine Learning',
+    'Deep Learning', 'PyTorch', 'MLOps', 'Docker'
+  ],
+  'Data Scientist': [
+    'Python', 'SQL', 'Statistics', 'Pandas', 'NumPy', 'Data Visualization',
+    'Scikit-learn', 'Machine Learning', 'Experiment Design'
+  ],
+  'Data Engineer': [
+    'Python', 'SQL', 'Data Modeling', 'ETL', 'Airflow', 'Spark', 'Docker', 'Cloud Platforms'
+  ],
+  'MLOps Engineer': [
+    'Python', 'Machine Learning', 'Docker', 'Kubernetes', 'CI/CD', 'MLOps',
+    'Model Monitoring', 'Cloud Platforms'
+  ]
+};
+
+/* Directed prerequisite graph. Edges point from prerequisite to
+   dependent skill. Must stay acyclic: the topological sort is what
+   produces the learning order, and a cycle makes the order undefined.
+   validateGraph() checks this at load. */
+const DEPENDENCIES = [
+  ['Python', 'Pandas'],
+  ['Python', 'NumPy'],
+  ['Python', 'SQL'],
+  ['Python', 'FastAPI'],
+  ['Python', 'Docker'],
+  ['NumPy', 'Statistics'],
+  ['Pandas', 'Data Visualization'],
+  ['Statistics', 'Machine Learning'],
+  ['Pandas', 'Machine Learning'],
+  ['Statistics', 'Experiment Design'],
+  ['Machine Learning', 'Scikit-learn'],
+  ['Machine Learning', 'Deep Learning'],
+  ['Deep Learning', 'PyTorch'],
+  ['PyTorch', 'Transformers'],
+  ['Transformers', 'Hugging Face'],
+  ['Hugging Face', 'Embeddings'],
+  ['Embeddings', 'Vector Databases'],
+  ['Vector Databases', 'RAG'],
+  ['RAG', 'LangChain'],
+  ['LangChain', 'LangGraph'],
+  ['LangGraph', 'LLM Evaluation'],
+  ['RAG', 'LLM Evaluation'],
+  ['SQL', 'Data Modeling'],
+  ['Data Modeling', 'ETL'],
+  ['ETL', 'Airflow'],
+  ['ETL', 'Spark'],
+  ['Docker', 'Kubernetes'],
+  ['Docker', 'MLOps'],
+  ['Machine Learning', 'MLOps'],
+  ['Kubernetes', 'CI/CD'],
+  ['MLOps', 'Model Monitoring'],
+  ['Docker', 'Cloud Platforms']
+];
+
+/* Alias table. The article's section 5 makes the point that string
+   matching treats "NLP" and "Natural Language Processing" as unrelated.
+   Expanding aliases before vectorising fixes the common cases without
+   needing a neural model. */
+const ALIASES = {
+  'nlp': 'natural language processing',
+  'llm': 'large language model',
+  'llms': 'large language models',
+  'rag': 'retrieval augmented generation',
+  'cv': 'computer vision',
+  'ml': 'machine learning',
+  'dl': 'deep learning',
+  'ci/cd': 'continuous integration continuous delivery',
+  'mlops': 'machine learning operations deployment',
+  'k8s': 'kubernetes',
+  'hf': 'hugging face',
+  'vector databases': 'vector database embedding store similarity search',
+  'embeddings': 'embedding vector representation semantic similarity',
+  'transformers': 'transformer attention architecture',
+  'langgraph': 'agent orchestration graph workflow',
+  'langchain': 'llm application framework chains',
+  'fastapi': 'api web service backend serving',
+  'pytorch': 'deep learning framework tensors neural networks'
+};
+
+const RESOURCES = [
+  { id: 1, title: 'Python for Data Work', skills: ['Python', 'Pandas', 'NumPy'],
+    difficulty: 'beginner', kind: 'course', hours: 20,
+    blurb: 'Dataframes, arrays and the standard numerical stack.' },
+  { id: 2, title: 'Statistics You Actually Need', skills: ['Statistics', 'Experiment Design'],
+    difficulty: 'beginner', kind: 'course', hours: 25,
+    blurb: 'Distributions, inference and designing a valid test.' },
+  { id: 3, title: 'Machine Learning Fundamentals', skills: ['Machine Learning', 'Scikit-learn'],
+    difficulty: 'beginner', kind: 'course', hours: 35,
+    blurb: 'Supervised and unsupervised learning end to end.' },
+  { id: 4, title: 'Deep Learning with PyTorch', skills: ['Deep Learning', 'PyTorch'],
+    difficulty: 'intermediate', kind: 'course', hours: 40,
+    blurb: 'Autograd, training loops and convolutional networks.' },
+  { id: 5, title: 'Transformers and Hugging Face', skills: ['Transformers', 'Hugging Face'],
+    difficulty: 'intermediate', kind: 'course', hours: 30,
+    blurb: 'Attention, pretrained models and fine-tuning.' },
+  { id: 6, title: 'Embeddings and Vector Search', skills: ['Embeddings', 'Vector Databases'],
+    difficulty: 'intermediate', kind: 'course', hours: 18,
+    blurb: 'Representation, indexing and approximate nearest neighbours.' },
+  { id: 7, title: 'Building RAG Applications', skills: ['RAG', 'Embeddings', 'Vector Databases'],
+    difficulty: 'intermediate', kind: 'project', hours: 25,
+    blurb: 'Chunking, retrieval, grounding and citation.' },
+  { id: 8, title: 'LLM Application Patterns with LangChain', skills: ['LangChain', 'RAG'],
+    difficulty: 'intermediate', kind: 'course', hours: 20,
+    blurb: 'Chains, memory, tools and structured output.' },
+  { id: 9, title: 'Agentic AI with LangGraph', skills: ['LangGraph', 'LangChain'],
+    difficulty: 'advanced', kind: 'project', hours: 28,
+    blurb: 'Stateful graphs, tool calling and multi-step agents.' },
+  { id: 10, title: 'Evaluating LLM Systems', skills: ['LLM Evaluation'],
+    difficulty: 'advanced', kind: 'course', hours: 15,
+    blurb: 'Offline metrics, human review and regression suites.' },
+  { id: 11, title: 'Serving Models with FastAPI', skills: ['FastAPI', 'Python'],
+    difficulty: 'intermediate', kind: 'project', hours: 14,
+    blurb: 'Async endpoints, validation and model serving.' },
+  { id: 12, title: 'Docker for Practitioners', skills: ['Docker'],
+    difficulty: 'beginner', kind: 'course', hours: 12,
+    blurb: 'Images, layers, volumes and reproducible environments.' },
+  { id: 13, title: 'Kubernetes in Practice', skills: ['Kubernetes', 'Docker'],
+    difficulty: 'advanced', kind: 'course', hours: 30,
+    blurb: 'Pods, services, scaling and rollouts.' },
+  { id: 14, title: 'MLOps: From Notebook to Production', skills: ['MLOps', 'CI/CD', 'Model Monitoring'],
+    difficulty: 'advanced', kind: 'course', hours: 35,
+    blurb: 'Pipelines, registries, drift detection and rollback.' },
+  { id: 15, title: 'SQL for Analysis', skills: ['SQL'],
+    difficulty: 'beginner', kind: 'course', hours: 16,
+    blurb: 'Joins, window functions and query performance.' },
+  { id: 16, title: 'Dimensional Data Modeling', skills: ['Data Modeling', 'SQL'],
+    difficulty: 'intermediate', kind: 'book', hours: 22,
+    blurb: 'Facts, dimensions and designing for change.' },
+  { id: 17, title: 'Pipelines with Airflow', skills: ['Airflow', 'ETL'],
+    difficulty: 'intermediate', kind: 'project', hours: 20,
+    blurb: 'DAGs, scheduling, retries and backfills.' },
+  { id: 18, title: 'Distributed Processing with Spark', skills: ['Spark', 'ETL'],
+    difficulty: 'advanced', kind: 'course', hours: 30,
+    blurb: 'Partitioning, shuffles and tuning jobs.' },
+  { id: 19, title: 'Telling Stories with Data', skills: ['Data Visualization'],
+    difficulty: 'beginner', kind: 'book', hours: 10,
+    blurb: 'Encoding choice, chart selection and honest axes.' },
+  { id: 20, title: 'Cloud Platforms for ML Teams', skills: ['Cloud Platforms', 'Docker'],
+    difficulty: 'intermediate', kind: 'course', hours: 24,
+    blurb: 'Managed training, storage and cost control.' },
+  { id: 21, title: 'Natural Language Processing Foundations', skills: ['Transformers', 'Embeddings'],
+    difficulty: 'intermediate', kind: 'course', hours: 26,
+    blurb: 'Tokenisation, language modelling and sequence tasks.' },
+  { id: 22, title: 'A Portfolio Project: End-to-End LLM Assistant',
+    skills: ['RAG', 'FastAPI', 'LLM Evaluation', 'LangChain'],
+    difficulty: 'advanced', kind: 'project', hours: 45,
+    blurb: 'Build, serve, evaluate and document one complete system.' }
+];
+
+const INTERESTS = ['LLMs', 'Agents', 'Computer Vision', 'Data Platforms',
+                   'Production Systems', 'Research', 'Visualization'];
+
+/* Which interests each resource speaks to. Drives the preference term. */
+const RESOURCE_INTERESTS = {
+  4: ['Research'], 5: ['LLMs', 'Research'], 6: ['LLMs'], 7: ['LLMs', 'Agents'],
+  8: ['LLMs', 'Agents'], 9: ['Agents'], 10: ['LLMs', 'Research'],
+  11: ['Production Systems'], 12: ['Production Systems'], 13: ['Production Systems'],
+  14: ['Production Systems'], 16: ['Data Platforms'], 17: ['Data Platforms'],
+  18: ['Data Platforms'], 19: ['Visualization'], 20: ['Production Systems', 'Data Platforms'],
+  21: ['LLMs', 'Research'], 22: ['LLMs', 'Agents', 'Production Systems']
+};
+
+/* Skills people commonly already have that no role here requires. They
+   never create a gap, but a profile you cannot enter is a profile the
+   engine cannot use — and the list has to show what it is counting. */
+const ADJACENT_SKILLS = ['JavaScript', 'TypeScript', 'React', 'HTML/CSS', 'Java',
+  'C++', 'R', 'Git', 'Linux', 'Bash', 'Excel', 'Tableau', 'REST APIs'];
+
+const ALL_SKILLS = (() => {
+  const s = new Set(ADJACENT_SKILLS);
+  Object.values(ROLES).forEach(list => list.forEach(x => s.add(x)));
+  DEPENDENCIES.forEach(([a, b]) => { s.add(a); s.add(b); });
+  RESOURCES.forEach(r => r.skills.forEach(x => s.add(x)));
+  return [...s].sort();
+})();
+
+/* ---------------------------------------------------------------
+   ENGINE — deterministic. No model, no network, no keys.
+
+   Pipeline:
+     profile -> skill gaps -> prerequisite closure -> topological order
+             -> candidate resources -> multi-factor ranking -> output
+--------------------------------------------------------------- */
+
+/* ---- graph ------------------------------------------------------ */
+
+function buildGraph(edges) {
+  const preds = new Map(), succs = new Map();
+  const touch = n => {
+    if (!preds.has(n)) preds.set(n, []);
+    if (!succs.has(n)) succs.set(n, []);
+  };
+  edges.forEach(([a, b]) => { touch(a); touch(b); preds.get(b).push(a); succs.get(a).push(b); });
+  return { preds, succs, nodes: [...preds.keys()] };
+}
+
+/* Kahn's algorithm, alphabetical tie-break so the order is stable
+   across runs. Returns null if a cycle exists, because a cyclic
+   prerequisite graph has no valid learning order and silently
+   returning a partial list would hide a data error. */
+function topoSort(g) {
+  const indeg = new Map(g.nodes.map(n => [n, g.preds.get(n).length]));
+  const ready = g.nodes.filter(n => indeg.get(n) === 0).sort();
+  const out = [];
+  while (ready.length) {
+    const n = ready.shift();
+    out.push(n);
+    g.succs.get(n).slice().sort().forEach(m => {
+      indeg.set(m, indeg.get(m) - 1);
+      if (indeg.get(m) === 0) {
+        ready.push(m);
+        ready.sort();
+      }
+    });
+  }
+  return out.length === g.nodes.length ? out : null;
+}
+
+/* Longest-path layering, used to draw the graph in rows. */
+function levels(g, order) {
+  const lv = new Map(g.nodes.map(n => [n, 0]));
+  order.forEach(n => g.succs.get(n).forEach(m => {
+    lv.set(m, Math.max(lv.get(m), lv.get(n) + 1));
+  }));
+  return lv;
+}
+
+/* Everything a skill transitively depends on. The article's role map
+   lists only headline skills, so a target can require Machine Learning
+   without listing the Statistics it rests on. Walking the closure
+   surfaces those implied prerequisites instead of silently skipping
+   them. */
+function closure(g, skills) {
+  const seen = new Set(), stack = [...skills];
+  while (stack.length) {
+    const s = stack.pop();
+    if (seen.has(s)) continue;
+    seen.add(s);
+    (g.preds.get(s) || []).forEach(p => { if (!seen.has(p)) stack.push(p); });
+  }
+  return seen;
+}
+
+const norm = s => s.toLowerCase().trim();
+
+function findSkillGaps(required, known) {
+  const k = new Set(known.map(norm));
+  return [...required].filter(s => !k.has(norm(s)));
+}
+
+/* Fraction of a skill's direct prerequisites the learner already has.
+   1.0 when a skill has no prerequisites at all. */
+function prerequisiteReadiness(g, skill, known) {
+  const p = g.preds.get(skill) || [];
+  if (!p.length) return 1;
+  const k = new Set(known.map(norm));
+  return p.filter(x => k.has(norm(x))).length / p.length;
+}
+
+/* ---- lexical similarity ----------------------------------------- */
+
+/* Stands in for sentence embeddings. A browser page cannot load a
+   transformer without a network call, so similarity here is TF-IDF
+   cosine over alias-expanded tokens. It resolves the synonym cases
+   (NLP / natural language processing) but it is lexical, not semantic:
+   it will not relate two phrases that share no vocabulary. */
+function expand(text) {
+  let t = ' ' + norm(text).replace(/[^a-z0-9/ ]/g, ' ') + ' ';
+  Object.entries(ALIASES).forEach(([k, v]) => {
+    const re = new RegExp('(^|\\s)' + k.replace(/[/]/g, '\\/') + '(\\s|$)', 'g');
+    if (re.test(t)) t += ' ' + v + ' ';
+  });
+  return t;
+}
+
+const tokens = text => expand(text).split(/\s+/).filter(w => w.length > 2);
+
+function buildTfIdf(docs) {
+  const df = new Map();
+  const tokenised = docs.map(d => {
+    const tk = tokens(d);
+    new Set(tk).forEach(w => df.set(w, (df.get(w) || 0) + 1));
+    return tk;
+  });
+  const N = docs.length;
+  const idf = w => Math.log((N + 1) / ((df.get(w) || 0) + 1)) + 1;
+
+  const vec = text => {
+    const tk = tokens(text), tf = new Map();
+    tk.forEach(w => tf.set(w, (tf.get(w) || 0) + 1));
+    const v = new Map();
+    let norm2 = 0;
+    tf.forEach((c, w) => {
+      const x = (c / tk.length) * idf(w);
+      v.set(w, x); norm2 += x * x;
+    });
+    const len = Math.sqrt(norm2) || 1;
+    v.forEach((x, w) => v.set(w, x / len));
+    return v;
+  };
+
+  const cos = (a, b) => {
+    let s = 0;
+    const [small, big] = a.size < b.size ? [a, b] : [b, a];
+    small.forEach((x, w) => { if (big.has(w)) s += x * big.get(w); });
+    return s;
+  };
+
+  return { vec, cos, tokenised };
+}
+
+/* ---- ranking ----------------------------------------------------- */
+
+const WEIGHTS = {
+  semantic: 0.30,
+  gap: 0.25,
+  readiness: 0.20,
+  difficulty: 0.10,
+  preference: 0.10,
+  diversity: 0.05
+};
+
+const LEVEL_INDEX = { beginner: 0, intermediate: 1, advanced: 2 };
+
+function difficultyMatch(resourceDifficulty, experience) {
+  const d = LEVEL_INDEX[resourceDifficulty], e = LEVEL_INDEX[experience];
+  return 1 - Math.abs(d - e) / 2;
+}
+
+function preferenceMatch(resource, interests) {
+  if (!interests.length) return 0.5;                 // neutral, not zero
+  const tags = RESOURCE_INTERESTS[resource.id] || [];
+  if (!tags.length) return 0.3;
+  const hits = tags.filter(t => interests.includes(t)).length;
+  return Math.min(1, hits / Math.min(tags.length, interests.length));
+}
+
+const jaccard = (a, b) => {
+  const A = new Set(a), B = new Set(b);
+  const inter = [...A].filter(x => B.has(x)).length;
+  const uni = new Set([...A, ...B]).size;
+  return uni ? inter / uni : 0;
+};
+
+/* Greedy selection with a diversity term computed against what is
+   already chosen, so ten near-identical RAG courses cannot fill the
+   list (section 24 of the write-up). */
+/* Urgency: how early a missing skill sits in the learning path. Without
+   this, the skill-gap term treats every gap as equally pressing, the
+   similarity query is dominated by whichever vocabulary is largest, and
+   a learner who knows only Python is told to start with retrieval
+   pipelines. Weighting gaps by position is what makes the resource list
+   agree with the path shown above it. */
+function rankResources(gaps, profile, g, path, lv, topK = 12) {
+  if (!gaps.length) return [];
+  /* Urgency = how many other missing skills this one unblocks.
+
+     Depth was the obvious choice and the wrong one: FastAPI sits one
+     edge from Python, so it looked foundational, yet nothing depends on
+     it. Machine Learning sits deeper but gates ten later skills. What
+     makes a skill urgent is what it unlocks, not how early it can be
+     reached. */
+  const gapNorm = new Set(gaps.map(norm));
+  const blocking = s => {
+    const seen = new Set(), stack = [...(g.succs.get(s) || [])];
+    while (stack.length) {
+      const n = stack.pop();
+      if (seen.has(n)) continue;
+      seen.add(n);
+      (g.succs.get(n) || []).forEach(m => { if (!seen.has(m)) stack.push(m); });
+    }
+    return [...seen].filter(x => gapNorm.has(norm(x))).length;
+  };
+  const block = new Map(path.map(s => [norm(s), blocking(s)]));
+  const maxB = Math.max(1, ...block.values());
+  const urg = s => 0.3 + 0.7 * ((block.get(norm(s)) || 0) / maxB);
+  const depth = s => lv.has(s) ? lv.get(s) : 0;
+
+  const docs = RESOURCES.map(r => r.title + ' ' + r.skills.join(' ') + ' ' + r.blurb);
+  const tfidf = buildTfIdf(docs);
+  // Repeat earlier gaps in the query so similarity leans toward what is
+  // needed first rather than toward the largest cluster of vocabulary.
+  const query = tfidf.vec(path.flatMap(s =>
+    Array(Math.max(1, Math.round(urg(s) * 3))).fill(s)).join(' '));
+  const gapSet = new Set(gaps.map(norm));
+
+  const base = RESOURCES.map((r, i) => {
+    const semantic = tfidf.cos(query, tfidf.vec(docs[i]));
+    // How urgent is the most urgent thing this teaches, plus a smaller
+    // bonus for breadth. Averaging urgency across all of a resource's
+    // skills penalised foundational courses that also cover one
+    // off-path topic, which pushed them out of the list entirely.
+    const hit = r.skills.filter(s => gapSet.has(norm(s)));
+    const gap = 0.8 * Math.max(...hit.map(urg))
+              + 0.2 * (hit.length / r.skills.length);
+    const readiness = r.skills.reduce((s, k) =>
+      s + prerequisiteReadiness(g, k, profile.known), 0) / r.skills.length;
+    const difficulty = difficultyMatch(r.difficulty, profile.experience);
+    const preference = preferenceMatch(r, profile.interests);
+    return { resource: r, parts: { semantic, gap, readiness, difficulty, preference } };
+  }).filter(c => c.resource.skills.some(s => gapSet.has(norm(s))));
+
+  /* Selection is coverage-driven, not a fixed top-8. A curriculum has
+     to actually teach every missing skill: with a fixed list the only
+     resources covering Statistics and Machine Learning fell below the
+     cut, leaving two required skills untaught. The loop runs until the
+     gaps are covered, within a floor and a ceiling. */
+  const covered = new Set();
+  const picked = [];
+  const remaining = () => gaps.filter(s => !covered.has(norm(s))).length;
+
+  while (base.length && picked.length < topK &&
+         (picked.length < 6 || remaining() > 0)) {
+    let bestIdx = -1, best = null;
+    // While anything is still uncovered, only consider resources that
+    // teach something new. Diversity is worth 0.05, not enough to stop
+    // the greedy step picking a redundant resource over a useful one.
+    const needCoverage = remaining() > 0;
+    const pool = needCoverage
+      ? base.filter(c => c.resource.skills.some(s =>
+          gapSet.has(norm(s)) && !covered.has(norm(s))))
+      : base;
+    const candidates = pool.length ? pool : base;
+
+    candidates.forEach(c => {
+      const i = base.indexOf(c);
+      const hits = c.resource.skills.filter(s => gapSet.has(norm(s)));
+      const fresh = hits.filter(s => !covered.has(norm(s)));
+      // Rewards teaching something not yet covered rather than merely
+      // differing from what is already chosen.
+      const diversity = hits.length ? fresh.length / hits.length : 0;
+      const parts = { ...c.parts, diversity };
+      let total = 0;
+      const contrib = {};
+      for (const k in WEIGHTS) {
+        contrib[k] = WEIGHTS[k] * parts[k];
+        total += contrib[k];
+      }
+      if (!best || total > best.total) {
+        best = { ...c, parts, contrib, total };
+        bestIdx = i;
+      }
+    });
+    base.splice(bestIdx, 1);
+    best.resource.skills.forEach(s => { if (gapSet.has(norm(s))) covered.add(norm(s)); });
+    picked.push(best);
+  }
+
+  // Selection optimises the set; display order should follow the path,
+  // so a resource is never shown before its prerequisites are taught.
+  const pos = r => Math.min(...r.skills
+    .filter(s => gapSet.has(norm(s))).map(depth));
+  return picked.sort((a, b) =>
+    pos(a.resource) - pos(b.resource) || b.total - a.total);
+}
+
+/* ---- pipeline ----------------------------------------------------- */
+
+function recommend(profile) {
+  const g = buildGraph(DEPENDENCIES);
+  const order = topoSort(g);
+  if (!order) {
+    return { error: 'The prerequisite graph contains a cycle, so no valid learning order exists. Check DEPENDENCIES.' };
+  }
+
+  const listed = ROLES[profile.role] || [];
+  const full = closure(g, listed.filter(s => g.preds.has(s)));
+  listed.forEach(s => full.add(s));
+
+  const gaps = findSkillGaps(full, profile.known);
+  const implied = new Set([...full].filter(s => !listed.includes(s)));
+
+  const rank = new Map(order.map((n, i) => [n, i]));
+  const path = gaps.slice().sort((a, b) =>
+    (rank.has(a) ? rank.get(a) : 1e9) - (rank.has(b) ? rank.get(b) : 1e9));
+
+  const lv = levels(g, order);
+  const resources = rankResources(gaps, { ...profile }, g, path, lv);
+  const totalHours = resources.reduce((s, r) => s + r.resource.hours, 0);
+
+  return {
+    role: profile.role,
+    known: listed.filter(s => new Set(profile.known.map(norm)).has(norm(s))),
+    gaps, implied, path, resources, totalHours,
+    uncovered: gaps.filter(s => !resources.some(c =>
+      c.resource.skills.some(x => norm(x) === norm(s)))),
+    weeks: profile.hoursPerWeek > 0 ? Math.ceil(totalHours / profile.hoursPerWeek) : null,
+    graph: g, order, levels: lv,
+    readiness: Object.fromEntries(path.map(s => [s, prerequisiteReadiness(g, s, profile.known)]))
+  };
+}
+
+/* ---------------------------------------------------------------
+   VIEW
+--------------------------------------------------------------- */
+
+const state = {
+  known: ['Python', 'JavaScript', 'SQL', 'React'],
+  role: 'Generative AI Engineer',
+  experience: 'intermediate',
+  hoursPerWeek: 10,
+  interests: ['LLMs', 'Agents']
+};
+
+const $ = s => document.querySelector(s);
+const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g,
+  c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+const PART_LABEL = {
+  semantic: 'Similarity', gap: 'Skill gap', readiness: 'Readiness',
+  difficulty: 'Difficulty', preference: 'Preference', diversity: 'Diversity'
+};
+
+function multiChips(host, values, key) {
+  host.innerHTML = '';
+  values.forEach(v => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'chip' + (state[key].includes(v) ? ' on' : '');
+    b.textContent = v;
+    b.setAttribute('aria-pressed', String(state[key].includes(v)));
+    b.onclick = () => {
+      const i = state[key].indexOf(v);
+      if (i > -1) state[key].splice(i, 1); else state[key].push(v);
+      b.classList.toggle('on');
+      b.setAttribute('aria-pressed', String(i === -1));
+    };
+    host.appendChild(b);
+  });
+}
+
+function radioChips(host, values, key, labels) {
+  host.innerHTML = '';
+  values.forEach(v => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'chip plain' + (state[key] === v ? ' on' : '');
+    b.textContent = labels ? labels[v] : v;
+    b.onclick = () => {
+      state[key] = v;
+      [...host.children].forEach(c => c.classList.remove('on'));
+      b.classList.add('on');
+    };
+    host.appendChild(b);
+  });
+}
+
+function buildForm() {
+  // Current skills. The list is long, so a filter box beats scrolling.
+  const skillHost = $('#skills');
+  const render = filter => {
+    const f = filter.toLowerCase();
+    const shown = ALL_SKILLS.filter(s =>
+      !f || s.toLowerCase().includes(f) || state.known.includes(s));
+    multiChips(skillHost, shown, 'known');
+  };
+  render('');
+  $('#skillFilter').oninput = e => render(e.target.value);
+
+  const sel = $('#role');
+  Object.keys(ROLES).forEach(r => {
+    const o = document.createElement('option');
+    o.value = r; o.textContent = r;
+    if (r === state.role) o.selected = true;
+    sel.appendChild(o);
+  });
+  sel.onchange = e => { state.role = e.target.value; };
+
+  radioChips($('#experience'), ['beginner', 'intermediate', 'advanced'], 'experience',
+    { beginner: 'Beginner', intermediate: 'Intermediate', advanced: 'Advanced' });
+
+  const h = $('#hours');
+  h.value = state.hoursPerWeek;
+  h.oninput = e => { state.hoursPerWeek = Math.max(0, parseInt(e.target.value, 10) || 0); };
+
+  multiChips($('#interests'), INTERESTS, 'interests');
+
+  $('#go').onclick = run;
+}
+
+function stageList(result) {
+  // Skills at the same graph depth have no dependency between them and
+  // can be learned in parallel, so they are grouped into one stage.
+  const byLevel = new Map();
+  result.path.forEach(s => {
+    const l = result.levels.get(s);
+    const key = l === undefined ? 999 : l;
+    if (!byLevel.has(key)) byLevel.set(key, []);
+    byLevel.get(key).push(s);
+  });
+  return [...byLevel.entries()].sort((a, b) => a[0] - b[0]).map(e => e[1]);
+}
+
+function run() {
+  const out = $('#results');
+  const r = recommend({
+    known: state.known, role: state.role, experience: state.experience,
+    hoursPerWeek: state.hoursPerWeek, interests: state.interests
+  });
+
+  if (r.error) {
+    out.innerHTML = `<section><p class="warn">${esc(r.error)}</p></section>`;
+    return;
+  }
+
+  if (!r.gaps.length) {
+    out.innerHTML = `<section><h2>No gaps found</h2>
+      <p class="empty">Your current skills already cover everything listed for
+      ${esc(r.role)}, including its implied prerequisites. Try a different target role.</p></section>`;
+    out.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    return;
+  }
+
+  const stages = stageList(r);
+
+  const gapTokens = r.path.map(s =>
+    `<li class="gap">${esc(s)}${r.implied.has(s)
+      ? '<span class="implied">prerequisite</span>' : ''}</li>`).join('');
+
+  const foundation = r.known.length
+    ? `<ul class="tokens">${r.known.map(s => `<li class="known">${esc(s)}</li>`).join('')}</ul>`
+    : '<p class="empty">None of your current skills appear in this role profile.</p>';
+
+  const stageHtml = stages.map((group, i) => `
+    <div class="stage">
+      <div class="num">${i + 1}</div>
+      <div class="body">
+        <ul class="tokens">${group.map(s => `<li class="gap">${esc(s)}</li>`).join('')}</ul>
+        <p class="par">${group.length > 1
+          ? 'No dependency between these — study in any order, or in parallel.'
+          : 'Depends on: ' + (r.graph.preds.get(group[0]) || []).map(esc).join(', ')
+            .replace(/^$/, 'nothing earlier in the graph')}</p>
+      </div>
+    </div>`).join('');
+
+  const resHtml = r.resources.map(c => {
+    const pct = Math.round(c.total * 100);
+    const bars = Object.entries(c.contrib).sort((a, b) => b[1] - a[1]).map(([k, v]) =>
+      `<li><span>${PART_LABEL[k]}</span><i style="width:${Math.max(2, v * 300)}px"></i>
+       <em>${v.toFixed(3)}</em></li>`).join('');
+    const teaches = c.resource.skills.filter(s =>
+      r.gaps.some(g => g.toLowerCase() === s.toLowerCase()));
+    return `
+      <div class="res">
+        <h3>${esc(c.resource.title)}</h3>
+        <p class="meta">${esc(c.resource.kind)} · ${esc(c.resource.difficulty)} · ${c.resource.hours} hours</p>
+        <p class="blurb">${esc(c.resource.blurb)}</p>
+        <div class="bar"><i style="width:${pct}%"></i></div>
+        <p class="pct">${pct}% match</p>
+        <ul class="tokens">${teaches.map(s => `<li class="gap">${esc(s)}</li>`).join('')}</ul>
+        <details><summary>Why this was ranked here</summary>
+          <ul class="breakdown">${bars}</ul>
+        </details>
+      </div>`;
+  }).join('');
+
+  const uncoveredHtml = r.uncovered.length ? `
+    <section><p class="warn">No resource in the catalogue teaches:
+      ${r.uncovered.map(esc).join(', ')}. These remain in the path but
+      unaddressed.</p></section>` : '';
+
+  out.innerHTML = `
+    ${uncoveredHtml}
+    <section>
+      <h2>Summary</h2>
+      <div class="summary-line">
+        <div><b>${r.gaps.length}</b>skills to learn</div>
+        <div><b>${r.totalHours}</b>hours of material</div>
+        ${r.weeks ? `<div><b>${r.weeks}</b>weeks at ${state.hoursPerWeek} h/week</div>` : ''}
+      </div>
+    </section>
+
+    <section>
+      <h2>What you already have</h2>
+      <p class="hint">Skills from your profile that this role requires.</p>
+      ${foundation}
+    </section>
+
+    <section>
+      <h2>Skill gaps</h2>
+      <p class="hint">In dependency order. Items marked <em>prerequisite</em> are not
+      listed in the role profile but are required by something that is.</p>
+      <ul class="tokens">${gapTokens}</ul>
+    </section>
+
+    <section>
+      <h2>Learning path</h2>
+      <p class="hint">Grouped into stages by graph depth. Everything in one stage is
+      independent of the rest of that stage.</p>
+      ${stageHtml}
+    </section>
+
+    <section>
+      <h2>Recommended resources</h2>
+      <p class="hint">Listed in the order to study them, chosen so that together they
+      cover every missing skill. The percentage is the match score, which is why it does
+      not fall steadily down the list &mdash; order follows the path, not the score.</p>
+      ${resHtml}
+    </section>`;
+
+  out.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function buildWeights() {
+  $('#weights').innerHTML = Object.entries(WEIGHTS)
+    .map(([k, v]) => `<li><span>${PART_LABEL[k]}</span>
+      <i style="width:${v * 700}px"></i><em>${v.toFixed(2)}</em></li>`).join('');
+}
+
+/* Fail loudly rather than showing a blank page. */
+window.addEventListener('error', e => {
+  const out = $('#results');
+  if (out) out.innerHTML = `<section><p class="warn">Script error: ${
+    esc(e.message || 'unknown')} — see the browser console.</p></section>`;
+});
+
+buildForm();
+buildWeights();
+
+</script>
+</body>
+</html>
